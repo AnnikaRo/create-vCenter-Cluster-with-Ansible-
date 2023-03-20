@@ -1,0 +1,21 @@
+---
+- name: Openshift Installation
+  hosts: local
+  connection: local
+  gather_facts: no
+
+  tasks:
+  - name: Create Download Directory
+    file:
+      path: "{{ downloaddir }}"
+      state: directory
+
+  - name: Download Openshift - Installer
+    ansible.builtin.get_url:
+      url: https://mirror.openshift.com/pub/openshift-v4/x86_64/clients/ocp/stable-4.11/openshift-install-linux.tar.gz
+      dest: "{{ downloaddir }}"
+ 
+  - name: Unarchive Openshift-Installer
+    unarchive:
+      src: "{{ downloaddir }}/openshift-install-linux.tar.gz"
+      dest: "{{ downloaddir }}"

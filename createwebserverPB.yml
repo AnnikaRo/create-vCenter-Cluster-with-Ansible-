@@ -1,0 +1,33 @@
+---
+- name: Install nginx webserver
+  hosts: webserver
+  gather_facts: no
+
+  tasks:
+  - name: disable firewall
+    firewalld:
+      state: disabled
+
+  - name: Disable selinux
+    ansible.posix.selinux:
+      state: disabled
+    register: selinux_result
+
+  - name: Output of selinux
+    debug: var=selinux_result.changed
+    when: selinux_result.changed == false
+
+  - name: Reboot vm if state of selinux changed
+    reboot:
+    when: selinux_result.changed == true
+
+  - name: Install nginx
+    dnf:
+      name: nginx
+      state: latest
+
+  - name: Start nginx
+    service:
+      name: nginx
+      state: started
+      enabled: yes 

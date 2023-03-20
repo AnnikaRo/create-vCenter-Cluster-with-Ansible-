@@ -1,0 +1,68 @@
+---
+- name: Install haproxy and config-file
+  hosts: haproxy
+  gather_facts: no
+
+  tasks:
+  - name: Add api and apps ip address 
+    community.general.nmcli:
+      conn_name: ens192
+      state: present
+      ip4:
+        - 10.2.5.194/24
+        - 10.2.5.195/24
+        - 10.2.5.190/24
+      gw4: 10.2.5.1
+      dns4:
+        - 10.2.5.9
+        - 10.2.5.10
+      type: ethernet
+      ifname: ens192
+
+  - name: Enable Connection
+    command: nmcli connection up ens192
+
+  - name: Open firewall ports 1936, 6443, 22623, 443, 80
+    firewalld:  
+      port: "{{ item }}"
+      permanent: true
+      state: enabled
+    loop:
+      - 1936/tcp
+      - 6443/tcp
+      - 22623/tcp
+      - 443/tcp
+      - 80/tcp
+
+  - name: Disable selinux
+    ansible.posix.selinux:
+      state: disabled
+    register: selinux_result
+
+  - name: Output of selinux
+    debug: var=selinux_result.changed
+    when: selinux_result.changed == false
+
+  - name: Reboot vm if state of selinux changed
+    reboot:
+    when: selinux_result.changed == true
+
+  - name: Install haproxy-packet
+    dnf:
+      name: haproxy
+      state: latest
+
+  - name: Start haproxy
+    service:
+      name: haproxy
+      state: started
+
+  - name: Change config-file
+    template:
+      src: haproxy.cfg
+      dest: /etc/haproxy
+
+  - name: Restart haproxy 
+    service:
+      name: haproxy
+      state: restarted

@@ -1,0 +1,92 @@
+---
+- name: Create ignition config files
+  hosts: local
+  connection: local
+  gather_facts: no
+
+  tasks:
+  - name: "Create {{ installdir }}"
+    file:
+      path: "{{ installdir }}"
+      state: directory
+
+  - name:  Get install-config.yaml - template
+    template:
+      src: install-config.yaml
+      dest: "{{ installdir }}/install-config.yaml"
+
+  - name: Generate Kubernetes manifests
+    command: "{{ downloaddir }}/openshift-install create manifests --dir {{ installdir }}"
+
+  - name: list files to delete
+    find:
+      path: "{{installdir }}/openshift"
+      pattern: 99_openshift-cluster-api_master-machines-*.yaml
+    register: result
+
+  - debug: var=result
+
+  - name: Remove Kubernetes manifests that define the controle plane- and compute machine sets
+    file: 
+      path: "{{ item.path }}"
+      state: absent
+    loop: "{{ result.files }}"
+
+  - name: list files to delete
+    find:
+      path: "{{installdir }}/openshift"
+      pattern: 99_openshift-cluster-api_worker-machineset-*.yaml
+    register: result
+
+  - debug: var=result
+
+  - name: Remove Kubernetes manifests that define the controle plane- and compute machine sets
+    file:
+      path: "{{ item.path }}"
+      state: absent
+    loop: "{{ result.files }}"
+
+  - name: Check the mastersSchedulable parameter
+    lineinfile:
+      path: "{{ installdir }}/manifests/cluster-scheduler-02-config.yml"
+      search_string: mastersSchedulable
+      line: "  mastersSchedulable: false" 
+
+  - name: Create Ignition config files
+    command: "{{ downloaddir }}/openshift-install create ignition-configs --dir {{ installdir }}"
+
+  - name: install jq package
+    dnf:
+      name: jq
+      state: latest
+
+  - name: Extract the infrastructre name from Igniton conifg file metadata
+    command: jq -r .infraID "{{ installdir }}/metadata.json" 
+    register: infrastructure_name
+
+  - name: Show infrastructure name
+    debug: var=infrastructure_name.changed
+
+  - name: Get merge-bootstrap.ign - template
+    template:
+      src: merge-bootstrap.ign
+      dest: "{{ installdir }}/merge-bootstrap.ign"
+
+
+  - name: Base encode master.ign, worker.ign and merge-bootstrap.ign
+    shell: |
+      base64 -w0 "{{ installdir }}/master.ign" "{{installdir }}/master.64"
+      base64 -w0 "{{ installdir }}/worker.ign" "{{ installdir }}/worker.64"
+      base64 -w0 "{{ installdir }}/merge-bootstrap.ign" "{{ installdir }}/merge-bootstrap.64"
+
+- name: Upload file to webserver       
+  hosts: webserver
+  gather_facts: no
+
+  tasks:
+  - name: Upload bootstrap ignition file to webserver01
+    copy:
+      src: "{{ downloaddir }}/merge-bootstrap.64"
+      dest: /root/merge-bootstrap.64
+
+

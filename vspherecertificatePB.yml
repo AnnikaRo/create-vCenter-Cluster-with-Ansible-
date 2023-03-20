@@ -1,0 +1,30 @@
+---
+- name: Download vCenter Certificate
+  hosts: local
+  connection: local
+  gather_facts: no
+
+  tasks:
+  - name: Create download-directory
+    file:
+      path: "{{ downloaddir }}"
+      state: directory
+
+  - name: Download and unzip certificate
+    unarchive:
+      src: "https://vcenter.erlebnisforum.local/certs/download.zip" 
+      dest: "{{ downloaddir }}"
+      remote_src: yes
+      validate_certs: false
+
+  - name: Copy certificate
+    copy:
+      src: "{{ item }}"
+      dest: /etc/pki/ca-trust/source/anchors
+    with_fileglob:
+      - "/root/downloads/certs/lin/*"
+
+  - name: Update certificate
+    command: update-ca-trust extract
+    changed_when: false
+
